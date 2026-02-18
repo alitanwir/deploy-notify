@@ -6,12 +6,12 @@ Deploy Notify is a modular Bash script for deployment notifications. It provides
 
 ## Environment Variable
 
-You can set the webhook endpoint using the `WEBHOOK_URL` environment variable. If not set, the script uses the value defined in the script.
+You can set the webhook endpoint using the `DEPLOY_NOTIFY_WEBHOOK_URL` environment variable. If not set, the script uses the value defined in the script.
 
 Example:
 
 ```
-export WEBHOOK_URL="https://your-webhook-endpoint"
+export DEPLOY_NOTIFY_WEBHOOK_URL="https://your-webhook-endpoint"
 ```
 
 ## Bash Script
@@ -22,7 +22,7 @@ export WEBHOOK_URL="https://your-webhook-endpoint"
 chmod +x deploy-notify.sh
 ```
 
-2. (Optional) Set WEBHOOK_URL at the top of the script to your endpoint.
+2. (Optional) Set SCRIPT_WEBHOOK_URL at the top of the script to your endpoint.
 3. Integrate into your deployment workflow (e.g., call after deploy).
 
 ## Google Apps Script Backend
@@ -37,4 +37,4 @@ chmod +x deploy-notify.sh
    - Select **Web app**
    - Set "Who has access" to "Anyone" (or as needed)
    - Copy the web app URL.
-6. Set `WEBHOOK_URL` in your Bash script to this URL.
+6. Set `SCRIPT_WEBHOOK_URL` in your Bash script to this URL or, set `DEPLOY_NOTIFY_WEBHOOK_URL` environment variable.

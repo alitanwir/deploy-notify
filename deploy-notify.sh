@@ -11,7 +11,7 @@
 
 # ---- config ----
 SCRIPT_WEBHOOK_URL=""  # Set to your webhook endpoint, or leave empty to log locally
-WEBHOOK_URL="${WEBHOOK_URL:-$SCRIPT_WEBHOOK_URL}"
+WEBHOOK_URL="${DEPLOY_NOTIFY_WEBHOOK_URL:-$SCRIPT_WEBHOOK_URL}"
 LOG_FILE="./deploy_notify.log"
 
 TARGETS=("Backend" "Frontend")
