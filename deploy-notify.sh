@@ -18,24 +18,51 @@ TARGETS=("Backend" "Frontend")
 
 # ---- select_targets ----
 select_targets() {
+  # Try gum (first preference)
+  if command -v gum >/dev/null 2>&1; then
+    echo "Select deployment targets (use space to select, enter to confirm):"
+    SELECTED_TARGETS=( $(printf "%s\n" "${TARGETS[@]}" | gum choose --no-limit) )
+    if [[ ${#SELECTED_TARGETS[@]} -eq 0 ]]; then
+      echo "No targets selected. Exiting."
+      exit 0
+    fi
+    echo "Selected targets: ${SELECTED_TARGETS[*]}"
+    echo -n "Proceed? [y/N]: "
+    read -r confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+      echo "Aborted."
+      exit 0
+    fi
+    return
+  fi
+
+  # Fallback to fzf (second preference)
+  if command -v fzf >/dev/null 2>&1; then
+    echo "Select deployment targets (tab/shift-tab to select, enter to confirm):"
+    SELECTED_TARGETS=( $(printf "%s\n" "${TARGETS[@]}" | fzf --multi --prompt="Targets: " --header="Tab to select, Enter to confirm") )
+    if [[ ${#SELECTED_TARGETS[@]} -eq 0 ]]; then
+      echo "No targets selected. Exiting."
+      exit 0
+    fi
+    echo "Selected targets: ${SELECTED_TARGETS[*]}"
+    echo -n "Proceed? [y/N]: "
+    read -r confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+      echo "Aborted."
+      exit 0
+    fi
+    return
+  fi
+
+  # Fallback to text-based menu
   local selected=()
   local choices=()
   local i=1
-
   echo "Select deployment targets (use space to select, enter to confirm):"
   for t in "${TARGETS[@]}"; do
     choices+=("$i) $t")
     ((i++))
   done
-
-  # macOS/BSD read workaround
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    read_cmd="gread -p"
-  else
-    read_cmd="read -p"
-  fi
-
-  # Interactive menu
   while true; do
     for idx in "${!choices[@]}"; do
       if [[ " ${selected[*]} " == *" $((idx+1)) "* ]]; then
@@ -44,7 +71,7 @@ select_targets() {
         echo " [ ] ${choices[$idx]}"
       fi
     done
-    echo "Enter numbers separated by space (e.g. 1 3), or press enter to finish:"
+    echo "Enter numbers separated by space (e.g. 1 2), or press enter to finish:"
     read -r -a input
     if [[ ${#input[@]} -eq 0 ]]; then
       break
@@ -57,18 +84,14 @@ select_targets() {
     done
     clear
   done
-
-  # Map numbers to target names
   SELECTED_TARGETS=()
   for idx in "${selected[@]}"; do
     SELECTED_TARGETS+=("${TARGETS[$((idx-1))]}")
   done
-
   if [[ ${#SELECTED_TARGETS[@]} -eq 0 ]]; then
     echo "No targets selected. Exiting."
     exit 0
   fi
-
   echo "Selected targets: ${SELECTED_TARGETS[*]}"
   echo -n "Proceed? [y/N]: "
   read -r confirm

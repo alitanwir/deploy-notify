@@ -1,6 +1,33 @@
 # Deploy Notify
 
+
 Deploy Notify is a modular Bash script for deployment notifications. It provides an interactive menu to select deployment targets, collects relevant metadata (timestamp, user, git info), and sends notifications via webhook or logs locally. Easily integrates into any deployment workflow and works on macOS and Linux with minimal dependencies.
+
+## Interactive Menu Options
+
+The script supports three interactive menu modes for selecting deployment targets:
+
+1. **gum** (recommended): Modern, beautiful UI. If installed, it will be used automatically.
+2. **fzf**: If gum is not available, fzf will be used for multi-select.
+3. **Text-based fallback**: If neither gum nor fzf is installed, a simple text-based menu will be used.
+
+### Install gum (recommended)
+
+macOS (Homebrew):
+   brew install gum
+Linux (Homebrew):
+   brew install gum
+Or see: https://github.com/charmbracelet/gum#installation
+
+### Install fzf (optional fallback)
+
+macOS (Homebrew):
+   brew install fzf
+Linux (Homebrew):
+   brew install fzf
+Or see: https://github.com/junegunn/fzf#installation
+
+If neither is installed, the script will fall back to a text-based menu.
 
 # Setup Instructions
 
