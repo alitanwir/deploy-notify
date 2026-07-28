@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+
+# =========================
+# Deploy Notify Only Script
+# =========================
+# Notifies deployment events via webhook or local log.
+# Compatible: macOS & Linux
+# Dependencies: curl, git (optional)
+# Author: Ali Tanwir
+# =========================
+
+# ---- config ----
+SCRIPT_WEBHOOK_URL=""  # Set to your webhook endpoint, or leave empty to log locally
+WEBHOOK_URL="${DEPLOY_NOTIFY_WEBHOOK_URL:-$SCRIPT_WEBHOOK_URL}"
+LOG_FILE="./deploy_notify-only.log"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+DEFAULT_TARGETS=(
+  Backend
+  Frontend
+)
+
+# ---- load_targets ----
+load_targets() {
+  local file="${DEPLOY_NOTIFY_TARGETS_FILE:-$SCRIPT_DIR/deploy-notify-targets.txt}"
+  TARGETS=()
+  if [[ -f "$file" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+      TARGETS+=("$line")
+    done < "$file"
+  fi
+  if [[ ${#TARGETS[@]} -eq 0 ]]; then
+    TARGETS=("${DEFAULT_TARGETS[@]}")
+  fi
+}
+
+# ---- select_targets ----
+select_targets() {
+  # Try gum (first preference)
+  if command -v gum >/dev/null 2>&1; then
+    echo "Select deployment targets (use space to select, enter to confirm):"
+    SELECTED_TARGETS=( $(printf "%s\n" "${TARGETS[@]}" | gum choose --no-limit) )
+    if [[ ${#SELECTED_TARGETS[@]} -eq 0 ]]; then
+      echo "No targets selected. Exiting."
+      exit 0
+    fi
+    echo "Selected targets: ${SELECTED_TARGETS[*]}"
+    echo -n "Proceed? [y/N]: "
+    read -r confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+      echo "Aborted."
+      exit 0
+    fi
+    return
+  fi
+
+  # Fallback to fzf (second preference)
+  if command -v fzf >/dev/null 2>&1; then
+    echo "Select deployment targets (tab/shift-tab to select, enter to confirm):"
+    SELECTED_TARGETS=( $(printf "%s\n" "${TARGETS[@]}" | fzf --multi --prompt="Targets: " --header="Tab to select, Enter to confirm") )
+    if [[ ${#SELECTED_TARGETS[@]} -eq 0 ]]; then
+      echo "No targets selected. Exiting."
+      exit 0
+    fi
+    echo "Selected targets: ${SELECTED_TARGETS[*]}"
+    echo -n "Proceed? [y/N]: "
+    read -r confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+      echo "Aborted."
+      exit 0
+    fi
+    return
+  fi
+
+  # Fallback to text-based menu
+  local selected=()
+  local choices=()
+  local i=1
+  echo "Select deployment targets (use space to select, enter to confirm):"
+  for t in "${TARGETS[@]}"; do
+    choices+=("$i) $t")
+    ((i++))
+  done
+  while true; do
+    for idx in "${!choices[@]}"; do
+      if [[ " ${selected[*]} " == *" $((idx+1)) "* ]]; then
+        echo " [x] ${choices[$idx]}"
+      else
+        echo " [ ] ${choices[$idx]}"
+      fi
+    done
+    echo "Enter numbers separated by space (e.g. 1 2), or press enter to finish:"
+    read -r -a input
+    if [[ ${#input[@]} -eq 0 ]]; then
+      break
+    fi
+    selected=()
+    for num in "${input[@]}"; do
+      if [[ $num =~ ^[0-9]+$ ]] && (( num >= 1 && num <= ${#choices[@]} )); then
+        selected+=("$num")
+      fi
+    done
+    clear
+  done
+  SELECTED_TARGETS=()
+  for idx in "${selected[@]}"; do
+    SELECTED_TARGETS+=("${TARGETS[$((idx-1))]}")
+  done
+  if [[ ${#SELECTED_TARGETS[@]} -eq 0 ]]; then
+    echo "No targets selected. Exiting."
+    exit 0
+  fi
+  echo "Selected targets: ${SELECTED_TARGETS[*]}"
+  echo -n "Proceed? [y/N]: "
+  read -r confirm
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "Aborted."
+    exit 0
+  fi
+}
+
+# ---- build_payload ----
+build_payload() {
+  local targets_json
+  targets_json=$(printf '"%s",' "${SELECTED_TARGETS[@]}")
+  targets_json="[${targets_json%,}]"
+
+  PAYLOAD=$(cat <<EOF
+{
+  "timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "user": "$USER",
+  "targets": $targets_json
+}
+EOF
+)
+}
+
+# ---- show_progress ----
+show_progress() {
+  local pid="$1"
+  local message="${2:-Sending notification}"
+  local frames='|/-\'
+  local i=0
+
+  printf "%s " "$message"
+  while kill -0 "$pid" 2>/dev/null; do
+    printf "\r%s %s" "$message" "${frames:i++%${#frames}:1}"
+    sleep 0.1
+  done
+  printf "\r%s done\n" "$message"
+}
+
+# ---- send_notification ----
+send_notification() {
+  local response_file="/tmp/deploy_notify_resp"
+  local curl_pid
+  local http_code
+
+  if [[ -n "$WEBHOOK_URL" ]]; then
+    curl -s -o "$response_file" -w "%{http_code}" -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK_URL" > /tmp/deploy_notify_http_code &
+    curl_pid=$!
+    show_progress "$curl_pid" "Sending notification"
+    wait "$curl_pid"
+    http_code="$(< /tmp/deploy_notify_http_code)"
+
+    if [[ "$http_code" =~ ^2|^3 ]]; then
+      echo "Notification sent successfully."
+    else
+      echo "Failed to send notification (HTTP $http_code). Logging locally."
+      echo "$PAYLOAD" >> "$LOG_FILE"
+    fi
+    rm -f "$response_file" /tmp/deploy_notify_http_code
+  else
+    echo "$PAYLOAD" >> "$LOG_FILE"
+    echo "Notification written to $LOG_FILE"
+  fi
+}
+
+# ---- main ----
+main() {
+  load_targets
+  select_targets
+  build_payload
+  send_notification
+}
+
+main "$@"
