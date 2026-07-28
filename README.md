@@ -29,6 +29,18 @@ Or see: https://github.com/junegunn/fzf#installation
 
 If neither is installed, the script will fall back to a text-based menu.
 
+## Deployment Targets
+
+Targets shown in the interactive menu are loaded from `deploy-notify-targets.txt` (one target per line). To add or remove targets, edit that file. Blank lines and lines starting with `#` are ignored.
+
+If the file is missing or empty, the script falls back to built-in defaults in the script.
+
+Override the targets file path with the `DEPLOY_NOTIFY_TARGETS_FILE` environment variable:
+
+```
+export DEPLOY_NOTIFY_TARGETS_FILE="/path/to/my-targets.txt"
+```
+
 # Setup Instructions
 
 ## Environment Variable

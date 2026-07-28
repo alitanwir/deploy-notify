@@ -14,7 +14,27 @@ SCRIPT_WEBHOOK_URL=""  # Set to your webhook endpoint, or leave empty to log loc
 WEBHOOK_URL="${DEPLOY_NOTIFY_WEBHOOK_URL:-$SCRIPT_WEBHOOK_URL}"
 LOG_FILE="./deploy_notify.log"
 
-TARGETS=("Backend" "Frontend")
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+DEFAULT_TARGETS=(
+  Backend
+  Frontend
+)
+
+# ---- load_targets ----
+load_targets() {
+  local file="${DEPLOY_NOTIFY_TARGETS_FILE:-$SCRIPT_DIR/deploy-notify-targets.txt}"
+  TARGETS=()
+  if [[ -f "$file" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+      TARGETS+=("$line")
+    done < "$file"
+  fi
+  if [[ ${#TARGETS[@]} -eq 0 ]]; then
+    TARGETS=("${DEFAULT_TARGETS[@]}")
+  fi
+}
 
 # ---- select_targets ----
 select_targets() {
@@ -130,17 +150,41 @@ EOF
 )
 }
 
+# ---- show_progress ----
+show_progress() {
+  local pid="$1"
+  local message="${2:-Sending notification}"
+  local frames='|/-\'
+  local i=0
+
+  printf "%s " "$message"
+  while kill -0 "$pid" 2>/dev/null; do
+    printf "\r%s %s" "$message" "${frames:i++%${#frames}:1}"
+    sleep 0.1
+  done
+  printf "\r%s done\n" "$message"
+}
+
 # ---- send_notification ----
 send_notification() {
+  local response_file="/tmp/deploy_notify_resp"
+  local curl_pid
+  local http_code
+
   if [[ -n "$WEBHOOK_URL" ]]; then
-    http_code=$(curl -s -o /tmp/deploy_notify_resp -w "%{http_code}" -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK_URL")
+    curl -s -o "$response_file" -w "%{http_code}" -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK_URL" > /tmp/deploy_notify_http_code &
+    curl_pid=$!
+    show_progress "$curl_pid" "Sending notification"
+    wait "$curl_pid"
+    http_code="$(< /tmp/deploy_notify_http_code)"
+
     if [[ "$http_code" =~ ^2|^3 ]]; then
       echo "Notification sent successfully."
     else
       echo "Failed to send notification (HTTP $http_code). Logging locally."
       echo "$PAYLOAD" >> "$LOG_FILE"
     fi
-    rm -f /tmp/deploy_notify_resp
+    rm -f "$response_file" /tmp/deploy_notify_http_code
   else
     echo "$PAYLOAD" >> "$LOG_FILE"
     echo "Notification written to $LOG_FILE"
@@ -149,6 +193,7 @@ send_notification() {
 
 # ---- main ----
 main() {
+  load_targets
   select_targets
   get_git_info
   build_payload
