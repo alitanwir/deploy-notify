@@ -29,14 +29,14 @@ function doPost(e) {
       "</li>" +
       "<li><b>Targets:</b> " +
       targets +
-      "</li>" +
-      "<li><b>Git Branch:</b> " +
-      gitBranch +
-      "</li>" +
-      "<li><b>Commit:</b> " +
-      gitCommit +
-      "</li>" +
-      "</ul>";
+      "</li>";
+    if (gitBranch && gitBranch !== "null") {
+      htmlBody += "<li><b>Git Branch:</b> " + gitBranch + "</li>";
+    }
+    if (gitCommit && gitCommit !== "null") {
+      htmlBody += "<li><b>Commit:</b> " + gitCommit + "</li>";
+    }
+    htmlBody += "</ul>";
 
     MailApp.sendEmail({
       to: emails,
